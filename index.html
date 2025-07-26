@@ -18,6 +18,7 @@
 
     <!-- PWA Config -->
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="favicon.png"> <!-- Favicon added -->
     <meta name="theme-color" content="#4f46e5"> <!-- Indigo -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Schnapszahl">
@@ -33,9 +34,19 @@
         
         .time-picker { display: flex; justify-content: center; align-items: center; gap: 5px; }
         .time-picker-column { text-align: center; }
-        .time-picker-scroll { height: 120px; width: 80px; overflow-y: scroll; scroll-snap-type: y mandatory; border: 1px solid #4b5563; border-radius: 8px; }
+        .time-picker-scroll { 
+            height: 120px; /* 3 * 40px item height */
+            width: 80px; 
+            overflow-y: scroll; 
+            scroll-snap-type: y mandatory; 
+            border: 1px solid #4b5563; 
+            border-radius: 8px; 
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+        }
         .time-picker-scroll::-webkit-scrollbar { display: none; }
         .time-picker-item { height: 40px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; scroll-snap-align: center; }
+        .time-picker-item-padding { height: 40px; flex-shrink: 0; }
         .time-picker-colon { font-size: 1.5rem; font-weight: bold; }
 
         input[type=range].custom-slider { accent-color: #4f46e5; }
@@ -86,7 +97,7 @@
                 <div class="bg-slate-700/50 p-4 rounded-lg text-xs text-slate-400">
                     <h4 class="font-bold text-slate-300 mb-2">Berechnungsgrundlage</h4>
                     <p>Die Schätzung des Promillewerts basiert auf der wissenschaftlich anerkannten <strong class="text-slate-200">Widmark-Formel</strong>. Sie berücksichtigt individuell Alter, Geschlecht und Gewicht zur Bestimmung des Körperwasseranteils.</p>
-                    <p class="mt-1">Für den Abbau wird eine durchschnittliche Rate von <strong class="text-slate-200">0,15 ‰ pro Stunde</strong> angenommen, beginnend ca. 30 Minuten nach Konsum. Alle Angaben sind Schätzwerte ohne Gewähr.</p>
+                    <p class="mt-1">Für den Abbau wird eine Rate von <strong class="text-slate-200">0,1g Alkohol pro kg Körpergewicht pro Stunde</strong> angenommen, beginnend ca. 30-60 Minuten nach Konsum. Alle Angaben sind Schätzwerte ohne Gewähr.</p>
                 </div>
 
                 <button id="reset-button" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition duration-300">Alle Getränke löschen</button>
@@ -117,6 +128,17 @@
     </div>
 
     <!-- Modals -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-30">
+        <div class="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h2 id="confirm-title" class="text-xl font-bold mb-4">Bestätigung</h2>
+            <p id="confirm-text" class="mb-6">Möchten Sie wirklich alle Getränke löschen?</p>
+            <div class="flex justify-end space-x-2">
+                <button id="confirm-cancel-button" class="px-4 py-2 bg-slate-600 rounded-lg hover:bg-slate-500">Abbrechen</button>
+                <button id="confirm-ok-button" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Löschen</button>
+            </div>
+        </div>
+    </div>
+
     <div id="user-data-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-20">
         <div class="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
             <h2 class="text-xl font-bold mb-4">Deine Daten</h2>
@@ -237,7 +259,7 @@
             { name: 'Gin Tonic', icon: '🍹', volume: 250, alcohol: 10.0, volumes: [{l:0.25,v:250},{l:0.4,v:400}] },
             { name: 'Aperol Spritz', icon: '🍹', volume: 250, alcohol: 11.0, volumes: [{l:0.25,v:250}] },
         ];
-        const ALCOHOL_BREAKDOWN_RATE = 0.15;
+        const ALCOHOL_GRAMS_BREAKDOWN_PER_KG_PER_HOUR = 0.1;
         const ALCOHOL_ABSORPTION_TIME = 30;
 
         // --- STATE ---
@@ -247,6 +269,7 @@
         let bacChart, projectionChart;
         let currentDrinkToAdd = null;
         let currentDrinkType = 'adjustable'; // 'adjustable' or 'quick'
+        let confirmCallback = null;
 
         // --- DOM ELEMENTS ---
         const navButtons = document.querySelectorAll('.nav-button');
@@ -257,6 +280,7 @@
         const modals = document.querySelectorAll('.fixed.inset-0');
         const projectionSlider = document.getElementById('projection-slider');
         const bacDisplayBox = document.getElementById('bac-display-box');
+        const confirmModal = document.getElementById('confirm-modal');
 
         // --- FUNCTIONS ---
 
@@ -299,22 +323,34 @@
         };
 
         const renderConsumedList = () => {
+            consumedDrinksList.innerHTML = '';
             if (consumedDrinks.length === 0) {
                 consumedDrinksList.innerHTML = `<p class="text-slate-400">Noch keine Getränke hinzugefügt.</p>`;
                 return;
             }
-            consumedDrinksList.innerHTML = [...consumedDrinks].reverse().map(drink => {
+            // Create a reversed copy for rendering, so top item is index 0
+            const reversedDrinks = [...consumedDrinks].reverse();
+            reversedDrinks.forEach((drink, index) => {
                 const time = drink.timestamp.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-                return `
-                <div class="flex justify-between items-center bg-slate-700/50 p-3 rounded-lg">
-                    <div>
+                const el = document.createElement('div');
+                el.className = 'flex justify-between items-center bg-slate-700/50 p-3 rounded-lg';
+                el.innerHTML = `
+                    <div class="flex items-center">
                         <span class="text-2xl mr-3">${drink.icon}</span>
-                        <span class="font-medium">${drink.name} (${drink.volume}ml)</span>
-                        ${drink.selectedAlcohol > 0 ? `<span class="text-sm text-slate-400 ml-2">(${drink.selectedAlcohol.toFixed(1)}%)</span>` : ''}
+                        <div>
+                            <div class="font-medium">${drink.name} (${drink.volume}ml)</div>
+                            ${drink.selectedAlcohol > 0 ? `<div class="text-xs text-slate-400">${drink.selectedAlcohol.toFixed(1)}%</div>` : ''}
+                        </div>
                     </div>
-                    <span class="text-sm text-slate-300">${time} Uhr</span>
-                </div>`;
-            }).join('');
+                    <div class="flex items-center gap-x-2">
+                        <span class="text-sm text-slate-300">${time} Uhr</span>
+                        <button data-index="${index}" class="delete-drink-btn p-2 rounded-full hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">
+                            <svg class="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                `;
+                consumedDrinksList.appendChild(el); // Use append now
+            });
         };
 
         const updateUserInfoDisplay = () => {
@@ -350,29 +386,36 @@
             }
         };
 
-        const calculateCurrentBAC = () => {
+        const calculateBACatTime = (targetTime) => {
             if (!userData.gender || !userData.weight || !userData.age) return 0;
             
             const r = getWidmarkFactor(userData.gender, userData.age);
-            let totalAlcoholGrams = 0;
-            let breakdownTotal = 0;
-            const now = new Date();
+            const hourlyBreakdownInGrams = userData.weight * ALCOHOL_GRAMS_BREAKDOWN_PER_KG_PER_HOUR;
+            
+            let totalRemainingAlcoholGrams = 0;
 
             consumedDrinks.forEach(drink => {
                 if (drink.selectedAlcohol > 0) {
-                    totalAlcoholGrams += drink.volume * (drink.selectedAlcohol / 100) * 0.8;
-                    const timeDiffMinutes = (now - drink.timestamp) / (1000 * 60);
+                    const initialAlcoholGrams = drink.volume * (drink.selectedAlcohol / 100) * 0.8;
+                    
+                    const timeDiffMinutes = (targetTime - drink.timestamp) / (1000 * 60);
+                    let metabolizedGrams = 0;
                     if (timeDiffMinutes > ALCOHOL_ABSORPTION_TIME) {
                         const breakdownHours = (timeDiffMinutes - ALCOHOL_ABSORPTION_TIME) / 60;
-                        breakdownTotal += breakdownHours * ALCOHOL_BREAKDOWN_RATE;
+                        metabolizedGrams = breakdownHours * hourlyBreakdownInGrams;
+                    }
+
+                    const remainingGrams = initialAlcoholGrams - metabolizedGrams;
+                    if (remainingGrams > 0) {
+                        totalRemainingAlcoholGrams += remainingGrams;
                     }
                 }
             });
 
-            if (totalAlcoholGrams === 0) return 0;
-            const peakBac = totalAlcoholGrams / (userData.weight * r);
-            const currentBac = peakBac - breakdownTotal;
-            return currentBac > 0 ? currentBac : 0;
+            if (totalRemainingAlcoholGrams <= 0) return 0;
+
+            const totalBac = totalRemainingAlcoholGrams / (userData.weight * r);
+            return totalBac > 0 ? totalBac : 0;
         };
 
         const updateAllCharts = () => {
@@ -448,27 +491,29 @@
             const r = getWidmarkFactor(userData.gender, userData.age);
             const now = new Date();
             const futureTime = new Date(now.getTime() + hoursInFuture * 60 * 60 * 1000);
+            const hourlyBreakdownInGrams = userData.weight * ALCOHOL_GRAMS_BREAKDOWN_PER_KG_PER_HOUR;
 
             let totalBac = 0;
             const datasets = consumedDrinks.map((drink, index) => {
                 if (drink.selectedAlcohol === 0) return null;
 
+                const initialAlcoholGrams = drink.volume * (drink.selectedAlcohol / 100) * 0.8;
+                
                 const timeDiffMinutes = (futureTime - drink.timestamp) / (1000 * 60);
-                let breakdownHours = 0;
+                let metabolizedGrams = 0;
                 if (timeDiffMinutes > ALCOHOL_ABSORPTION_TIME) {
-                    breakdownHours = (timeDiffMinutes - ALCOHOL_ABSORPTION_TIME) / 60;
+                    const breakdownHours = (timeDiffMinutes - ALCOHOL_ABSORPTION_TIME) / 60;
+                    metabolizedGrams = breakdownHours * hourlyBreakdownInGrams;
                 }
 
-                const alcoholGrams = drink.volume * (drink.selectedAlcohol / 100) * 0.8;
-                const peakBacContribution = alcoholGrams / (userData.weight * r);
-                const currentBacContribution = peakBacContribution - (breakdownHours * ALCOHOL_BREAKDOWN_RATE);
+                const remainingGrams = initialAlcoholGrams - metabolizedGrams;
+                const bacContribution = remainingGrams > 0 ? remainingGrams / (userData.weight * r) : 0;
                 
-                const finalBac = currentBacContribution > 0 ? currentBacContribution : 0;
-                totalBac += finalBac;
+                totalBac += bacContribution;
 
                 return {
                     label: `${drink.icon} ${drink.name}`,
-                    data: [finalBac],
+                    data: [bacContribution],
                     backgroundColor: ['#6366f1', '#f87171', '#fbbf24', '#60a5fa', '#a78bfa', '#f472b6', '#34d399'][index % 7]
                 };
             }).filter(Boolean);
@@ -517,15 +562,15 @@
                                             font: { size: 10 }
                                         }
                                     },
-                                    limit15: {
+                                    limit16: {
                                         type: 'line',
-                                        xMin: 1.5,
-                                        xMax: 1.5,
+                                        xMin: 1.6,
+                                        xMax: 1.6,
                                         borderColor: 'rgb(239, 68, 68)',
                                         borderWidth: 2,
                                         borderDash: [6, 6],
                                         label: {
-                                            content: '1.5‰ Limit',
+                                            content: '1.6‰ Limit',
                                             position: 'start',
                                             backgroundColor: 'rgba(239, 68, 68, 0.8)',
                                             color: 'white',
@@ -555,20 +600,21 @@
                 const m = Math.round((hoursDecimal - h) * 60);
                 return `ca. ${h} Std. und ${m} Min.`;
             };
-
-            const currentBacNow = calculateCurrentBAC();
+            
+            const hourlyBreakdownInPromille = hourlyBreakdownInGrams / (userData.weight * r);
+            const currentBacNow = calculateBACatTime(new Date());
             let timeInfoHTML = '';
 
-            if (currentBacNow > 1.5) {
-                const hoursTo15 = (currentBacNow - 1.5) / ALCOHOL_BREAKDOWN_RATE;
-                timeInfoHTML += `<div>Unter 1.5‰ in: <span class="font-bold">${formatHoursAndMinutes(hoursTo15)}</span></div>`;
+            if (currentBacNow > 1.6) {
+                const hoursTo16 = (currentBacNow - 1.6) / hourlyBreakdownInPromille;
+                timeInfoHTML += `<div>Unter 1.6‰ in: <span class="font-bold">${formatHoursAndMinutes(hoursTo16)}</span></div>`;
             }
             if (currentBacNow > 0.5) {
-                const hoursTo05 = (currentBacNow - 0.5) / ALCOHOL_BREAKDOWN_RATE;
+                const hoursTo05 = (currentBacNow - 0.5) / hourlyBreakdownInPromille;
                 timeInfoHTML += `<div>Unter 0.5‰ in: <span class="font-bold">${formatHoursAndMinutes(hoursTo05)}</span></div>`;
             }
             if (currentBacNow > 0) {
-                 const hoursToSober = currentBacNow / ALCOHOL_BREAKDOWN_RATE;
+                 const hoursToSober = currentBacNow / hourlyBreakdownInPromille;
                  timeInfoHTML += `<div>Komplett nüchtern in: <span class="font-bold">${formatHoursAndMinutes(hoursToSober)}</span></div>`;
             } else {
                 timeInfoHTML = consumedDrinks.length > 0 ? `Du bist wieder nüchtern.` : `Füge ein alkoholisches Getränk hinzu, um den Verlauf zu sehen.`;
@@ -578,7 +624,7 @@
         
         const updateBacDisplay = (bac) => {
             bacDisplayBox.classList.remove('bg-indigo-900/50', 'border-indigo-500', 'text-indigo-200', 'bg-yellow-900/50', 'border-yellow-500', 'text-yellow-200', 'bg-red-900/50', 'border-red-500', 'text-red-200');
-            if (bac > 1.5) {
+            if (bac > 1.6) {
                 bacDisplayBox.classList.add('bg-red-900/50', 'border-red-500', 'text-red-200');
             } else if (bac > 0.5) {
                 bacDisplayBox.classList.add('bg-yellow-900/50', 'border-yellow-500', 'text-yellow-200');
@@ -592,10 +638,11 @@
         
         const setupTimeScroller = (containerId, max, current, step = 1) => {
             const container = document.getElementById(containerId);
-            let items = '';
+            let items = '<div class="time-picker-item-padding"></div>'; // Top padding
             for (let i = 0; i < max; i += step) {
                 items += `<div class="time-picker-item">${String(i).padStart(2, '0')}</div>`;
             }
+            items += '<div class="time-picker-item-padding"></div>'; // Bottom padding
             container.innerHTML = items;
             const currentIndex = Math.round(current / step);
             container.scrollTop = currentIndex * 40;
@@ -681,13 +728,19 @@
         };
 
         const updateAll = () => {
-            const currentBac = calculateCurrentBAC();
+            const currentBac = calculateBACatTime(new Date());
             bacResultEl.textContent = `${currentBac.toFixed(2)} ‰`;
             updateBacDisplay(currentBac);
             renderConsumedList();
             updateAllCharts();
             updateUserInfoDisplay();
             saveState();
+        };
+
+        const showConfirm = (text, callback) => {
+            confirmModal.querySelector('#confirm-text').textContent = text;
+            confirmCallback = callback;
+            openModal('confirm-modal');
         };
 
         // --- EVENT LISTENERS ---
@@ -703,13 +756,39 @@
             updateAll();
         });
         document.getElementById('reset-button').addEventListener('click', () => {
-            if (confirm("Möchten Sie wirklich alle getrunkenen Getränke löschen?")) {
+            showConfirm("Möchten Sie wirklich alle Getränke löschen?", () => {
                 consumedDrinks = [];
                 projectionSlider.value = 0;
                 updateAll();
+            });
+        });
+
+        consumedDrinksList.addEventListener('click', (e) => {
+            const deleteBtn = e.target.closest('.delete-drink-btn');
+            if (deleteBtn) {
+                const index = parseInt(deleteBtn.dataset.index);
+                if (!isNaN(index)) {
+                    // Since we render the reversed list, the visual index corresponds to the reversed array
+                    const reversedIndex = consumedDrinks.length - 1 - index;
+                    consumedDrinks.splice(reversedIndex, 1);
+                    updateAll();
+                }
             }
         });
-        modals.forEach(m => m.querySelector('.modal-cancel-button').addEventListener('click', () => closeModal(m.id)));
+
+        document.getElementById('confirm-cancel-button').addEventListener('click', () => closeModal('confirm-modal'));
+        document.getElementById('confirm-ok-button').addEventListener('click', () => {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            closeModal('confirm-modal');
+        });
+
+        modals.forEach(m => {
+            if (m.id !== 'confirm-modal') {
+                m.querySelector('.modal-cancel-button').addEventListener('click', () => closeModal(m.id));
+            }
+        });
         projectionSlider.addEventListener('input', updateProjectionBarChart);
 
         document.getElementById('open-custom-drink-modal-button').addEventListener('click', () => {
