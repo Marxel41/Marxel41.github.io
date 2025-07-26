@@ -54,7 +54,7 @@
 
         <main class="p-4">
             <div id="dashboard-view" class="view active space-y-6">
-                <div class="bg-indigo-900/50 border-l-4 border-indigo-500 text-indigo-200 p-4 rounded-lg">
+                <div id="bac-display-box" class="p-4 rounded-lg transition-colors duration-300">
                     <div class="flex justify-between items-center">
                         <div>
                             <p class="font-bold">Aktueller Promillewert</p>
@@ -70,7 +70,7 @@
 
                 <div class="bg-slate-700/50 p-4 rounded-lg">
                     <h3 class="text-lg font-semibold mb-2">Zeitlicher Verlauf</h3>
-                    <p id="sober-time-info" class="mb-4">Füge ein alkoholisches Getränk hinzu, um den Verlauf zu sehen.</p>
+                    <div id="sober-time-info" class="mb-4 text-sm space-y-1"></div>
                     <div><canvas id="projection-chart"></canvas></div>
                     <div class="mt-4">
                         <label for="projection-slider" id="projection-slider-label" class="block text-sm font-medium text-center">Jetzt</label>
@@ -82,6 +82,13 @@
                     <h2 class="text-xl font-semibold mb-2">Getrunkene Getränke</h2>
                     <div id="consumed-drinks-list" class="space-y-2"></div>
                 </div>
+                
+                <div class="bg-slate-700/50 p-4 rounded-lg text-xs text-slate-400">
+                    <h4 class="font-bold text-slate-300 mb-2">Berechnungsgrundlage</h4>
+                    <p>Die Schätzung des Promillewerts basiert auf der wissenschaftlich anerkannten <strong class="text-slate-200">Widmark-Formel</strong>. Sie berücksichtigt individuell Alter, Geschlecht und Gewicht zur Bestimmung des Körperwasseranteils.</p>
+                    <p class="mt-1">Für den Abbau wird eine durchschnittliche Rate von <strong class="text-slate-200">0,15 ‰ pro Stunde</strong> angenommen, beginnend ca. 30 Minuten nach Konsum. Alle Angaben sind Schätzwerte ohne Gewähr.</p>
+                </div>
+
                 <button id="reset-button" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition duration-300">Alle Getränke löschen</button>
             </div>
 
@@ -249,6 +256,7 @@
         const soberTimeInfo = document.getElementById('sober-time-info');
         const modals = document.querySelectorAll('.fixed.inset-0');
         const projectionSlider = document.getElementById('projection-slider');
+        const bacDisplayBox = document.getElementById('bac-display-box');
 
         // --- FUNCTIONS ---
 
@@ -494,17 +502,32 @@
                             title: { display: true, text: `Promillewert: ${totalBac.toFixed(2)}‰`, color: textColor },
                             annotation: {
                                 annotations: {
-                                    line1: {
+                                    limit05: {
                                         type: 'line',
                                         xMin: 0.5,
                                         xMax: 0.5,
-                                        borderColor: 'rgb(255, 99, 132)',
+                                        borderColor: 'rgb(250, 204, 21)',
                                         borderWidth: 2,
                                         borderDash: [6, 6],
                                         label: {
                                             content: '0.5‰ Limit',
                                             position: 'start',
-                                            backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                                            backgroundColor: 'rgba(250, 204, 21, 0.8)',
+                                            color: 'black',
+                                            font: { size: 10 }
+                                        }
+                                    },
+                                    limit15: {
+                                        type: 'line',
+                                        xMin: 1.5,
+                                        xMax: 1.5,
+                                        borderColor: 'rgb(239, 68, 68)',
+                                        borderWidth: 2,
+                                        borderDash: [6, 6],
+                                        label: {
+                                            content: '1.5‰ Limit',
+                                            position: 'start',
+                                            backgroundColor: 'rgba(239, 68, 68, 0.8)',
                                             color: 'white',
                                             font: { size: 10 }
                                         }
@@ -526,14 +549,41 @@
                 });
             }
 
+            const formatHoursAndMinutes = (hoursDecimal) => {
+                if (hoursDecimal <= 0) return '';
+                const h = Math.floor(hoursDecimal);
+                const m = Math.round((hoursDecimal - h) * 60);
+                return `ca. ${h} Std. und ${m} Min.`;
+            };
+
             const currentBacNow = calculateCurrentBAC();
+            let timeInfoHTML = '';
+
+            if (currentBacNow > 1.5) {
+                const hoursTo15 = (currentBacNow - 1.5) / ALCOHOL_BREAKDOWN_RATE;
+                timeInfoHTML += `<div>Unter 1.5‰ in: <span class="font-bold">${formatHoursAndMinutes(hoursTo15)}</span></div>`;
+            }
+            if (currentBacNow > 0.5) {
+                const hoursTo05 = (currentBacNow - 0.5) / ALCOHOL_BREAKDOWN_RATE;
+                timeInfoHTML += `<div>Unter 0.5‰ in: <span class="font-bold">${formatHoursAndMinutes(hoursTo05)}</span></div>`;
+            }
             if (currentBacNow > 0) {
-                const hoursToSober = currentBacNow / ALCOHOL_BREAKDOWN_RATE;
-                const h = Math.floor(hoursToSober);
-                const m = Math.floor((hoursToSober - h) * 60);
-                soberTimeInfo.textContent = `Voraussichtlich nüchtern in ca. ${h} Std. und ${m} Min.`;
+                 const hoursToSober = currentBacNow / ALCOHOL_BREAKDOWN_RATE;
+                 timeInfoHTML += `<div>Komplett nüchtern in: <span class="font-bold">${formatHoursAndMinutes(hoursToSober)}</span></div>`;
             } else {
-                soberTimeInfo.textContent = consumedDrinks.length > 0 ? `Du bist wieder nüchtern.` : `Füge ein alkoholisches Getränk hinzu, um den Verlauf zu sehen.`;
+                timeInfoHTML = consumedDrinks.length > 0 ? `Du bist wieder nüchtern.` : `Füge ein alkoholisches Getränk hinzu, um den Verlauf zu sehen.`;
+            }
+            soberTimeInfo.innerHTML = timeInfoHTML;
+        };
+        
+        const updateBacDisplay = (bac) => {
+            bacDisplayBox.classList.remove('bg-indigo-900/50', 'border-indigo-500', 'text-indigo-200', 'bg-yellow-900/50', 'border-yellow-500', 'text-yellow-200', 'bg-red-900/50', 'border-red-500', 'text-red-200');
+            if (bac > 1.5) {
+                bacDisplayBox.classList.add('bg-red-900/50', 'border-red-500', 'text-red-200');
+            } else if (bac > 0.5) {
+                bacDisplayBox.classList.add('bg-yellow-900/50', 'border-yellow-500', 'text-yellow-200');
+            } else {
+                bacDisplayBox.classList.add('bg-indigo-900/50', 'border-indigo-500', 'text-indigo-200');
             }
         };
 
@@ -631,7 +681,9 @@
         };
 
         const updateAll = () => {
-            bacResultEl.textContent = `${calculateCurrentBAC().toFixed(2)} ‰`;
+            const currentBac = calculateCurrentBAC();
+            bacResultEl.textContent = `${currentBac.toFixed(2)} ‰`;
+            updateBacDisplay(currentBac);
             renderConsumedList();
             updateAllCharts();
             updateUserInfoDisplay();
@@ -738,4 +790,3 @@
     </script>
 </body>
 </html>
-
