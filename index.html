@@ -601,20 +601,36 @@
                 return `ca. ${h} Std. und ${m} Min.`;
             };
             
-            const hourlyBreakdownInPromille = hourlyBreakdownInGrams / (userData.weight * r);
             const currentBacNow = calculateBACatTime(new Date());
             let timeInfoHTML = '';
 
+            const calculateTimeToTarget = (targetBac) => {
+                const currentBac = calculateBACatTime(new Date());
+                if (currentBac <= targetBac) return 0;
+
+                let minutesInFuture = 0;
+                // Check in 1-minute intervals for up to 24 hours
+                for (let i = 0; i < 60 * 24; i++) {
+                    minutesInFuture++;
+                    const futureTime = new Date(new Date().getTime() + minutesInFuture * 60000);
+                    const futureBac = calculateBACatTime(futureTime);
+                    if (futureBac <= targetBac) {
+                        return minutesInFuture / 60; // Return hours
+                    }
+                }
+                return 24; // Fallback for very high values
+            };
+
             if (currentBacNow > 1.6) {
-                const hoursTo16 = (currentBacNow - 1.6) / hourlyBreakdownInPromille;
+                const hoursTo16 = calculateTimeToTarget(1.6);
                 timeInfoHTML += `<div>Unter 1.6‰ in: <span class="font-bold">${formatHoursAndMinutes(hoursTo16)}</span></div>`;
             }
             if (currentBacNow > 0.5) {
-                const hoursTo05 = (currentBacNow - 0.5) / hourlyBreakdownInPromille;
+                const hoursTo05 = calculateTimeToTarget(0.5);
                 timeInfoHTML += `<div>Unter 0.5‰ in: <span class="font-bold">${formatHoursAndMinutes(hoursTo05)}</span></div>`;
             }
             if (currentBacNow > 0) {
-                 const hoursToSober = currentBacNow / hourlyBreakdownInPromille;
+                 const hoursToSober = calculateTimeToTarget(0);
                  timeInfoHTML += `<div>Komplett nüchtern in: <span class="font-bold">${formatHoursAndMinutes(hoursToSober)}</span></div>`;
             } else {
                 timeInfoHTML = consumedDrinks.length > 0 ? `Du bist wieder nüchtern.` : `Füge ein alkoholisches Getränk hinzu, um den Verlauf zu sehen.`;
