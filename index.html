@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="de" class=""> <!-- 'dark' class wird hier umgeschaltet -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Schnapszahl</title>
+
+    <!-- Tailwind CSS & Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js & Annotation Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+
+
+    <!-- PWA Config -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5"> <!-- Indigo -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Schnapszahl">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="images/icons/icon-180x180.png">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        * { -webkit-tap-highlight-color: transparent; }
+        .view { display: none; }
+        .view.active { display: block; }
+        html.dark { color-scheme: dark; }
+        
+        .time-picker { display: flex; justify-content: center; align-items: center; gap: 5px; }
+        .time-picker-column { text-align: center; }
+        .time-picker-scroll { height: 120px; width: 80px; overflow-y: scroll; scroll-snap-type: y mandatory; border: 1px solid #e5e7eb; border-radius: 8px; }
+        .dark .time-picker-scroll { border-color: #4b5563; }
+        .time-picker-scroll::-webkit-scrollbar { display: none; }
+        .time-picker-item { height: 40px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; scroll-snap-align: center; }
+        .time-picker-colon { font-size: 1.5rem; font-weight: bold; }
+
+        input[type=range].projection-slider { accent-color: #4f46e5; }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300">
+
+    <div id="app-container" class="max-w-lg mx-auto bg-white dark:bg-slate-800 min-h-screen shadow-lg pb-20">
+
+        <header class="bg-indigo-600 text-white p-4 shadow-md flex justify-between items-center sticky top-0 z-10">
+            <h1 class="text-xl font-bold">Schnapszahl</h1>
+            <div class="flex items-center gap-4">
+                <button id="user-data-button" class="p-2 rounded-full hover:bg-indigo-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                </button>
+                <button id="dark-mode-toggle" class="p-2 rounded-full hover:bg-indigo-500">
+                    <svg id="theme-icon-light" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    <svg id="theme-icon-dark" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                </button>
+            </div>
+        </header>
+
+        <main class="p-4">
+            <div id="dashboard-view" class="view active space-y-6">
+                <div class="bg-indigo-50 dark:bg-indigo-900/50 border-l-4 border-indigo-500 text-indigo-800 dark:text-indigo-200 p-4 rounded-lg">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-bold">Aktueller Promillewert</p>
+                            <p id="bac-result" class="text-4xl font-bold">0.00 ‰</p>
+                        </div>
+                        <div id="user-info-display" class="text-right text-base flex items-center gap-x-4">
+                            <p class="text-slate-500 dark:text-slate-400">Daten fehlen</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div><canvas id="bac-chart"></canvas></div>
+
+                <div class="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-2">Zeitlicher Verlauf</h3>
+                    <p id="sober-time-info" class="mb-4">Füge ein alkoholisches Getränk hinzu, um den Verlauf zu sehen.</p>
+                    <div><canvas id="projection-chart"></canvas></div>
+                    <div class="mt-4">
+                        <label for="projection-slider" id="projection-slider-label" class="block text-sm font-medium text-center">Jetzt</label>
+                        <input id="projection-slider" type="range" min="0" max="10" value="0" step="0.5" class="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer mt-2 projection-slider">
+                    </div>
+                </div>
+
+                <div>
+                    <h2 class="text-xl font-semibold mb-2">Getrunkene Getränke</h2>
+                    <div id="consumed-drinks-list" class="space-y-2"></div>
+                </div>
+                <button id="reset-button" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition duration-300">Alle Getränke löschen</button>
+            </div>
+
+            <div id="menu-view" class="view space-y-8">
+                <div>
+                    <h2 class="text-xl font-semibold mb-4">Einstellbar</h2>
+                    <div id="adjustable-drink-menu-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
+                </div>
+                <div>
+                    <h2 class="text-xl font-semibold mb-4">Schnellauswahl</h2>
+                    <div id="quick-select-menu-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
+                </div>
+            </div>
+        </main>
+
+        <nav class="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-around z-10">
+            <button data-view="dashboard-view" class="nav-button flex-1 p-4 text-indigo-600 dark:text-indigo-400 text-center">Übersicht</button>
+            <button data-view="menu-view" class="nav-button flex-1 p-4 text-slate-500 dark:text-slate-400 text-center">Menü</button>
+        </nav>
+    </div>
+
+    <!-- Modals -->
+    <div id="user-data-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-20">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h2 class="text-xl font-bold mb-4">Deine Daten</h2>
+            <form id="user-data-form" class="space-y-4">
+                <div>
+                    <label for="gender" class="block text-sm font-medium">Geschlecht</label>
+                    <select id="gender" class="mt-1 block w-full py-2 px-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                </div>
+                <div>
+                    <label for="weight" class="block text-sm font-medium">Gewicht (in kg)</label>
+                    <input type="number" id="weight" placeholder="75" class="mt-1 block w-full py-2 px-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="age" class="block text-sm font-medium">Alter</label>
+                    <input type="number" id="age" placeholder="30" class="mt-1 block w-full py-2 px-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" class="modal-cancel-button px-4 py-2 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500">Abbrechen</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="add-drink-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-20">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm space-y-4">
+            <h2 id="add-drink-title" class="text-2xl font-bold text-center"></h2>
+            <form id="add-drink-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium">Menge</label>
+                    <div id="drink-volume-selector" class="mt-1 flex flex-wrap gap-2"></div>
+                </div>
+                <div id="alcohol-slider-container">
+                    <label for="alcohol-percentage" class="block text-sm font-medium">Alkoholgehalt: <span id="alcohol-percentage-label" class="font-bold"></span></label>
+                    <input type="range" id="alcohol-percentage" class="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer mt-2 accent-indigo-600">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Uhrzeit des Konsums</label>
+                    <div class="time-picker mt-1">
+                        <div class="time-picker-column"><div id="hours-scroll" class="time-picker-scroll"></div></div>
+                        <div class="time-picker-colon">:</div>
+                        <div class="time-picker-column"><div id="minutes-scroll" class="time-picker-scroll"></div></div>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" class="modal-cancel-button px-4 py-2 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500">Abbrechen</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Hinzufügen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    window.onload = () => {
+        // --- DATA & CONFIG ---
+        const adjustableDrinks = [
+            { id: 1, name: 'Bier', icon: '🍺', alcoholMin: 4, alcoholMax: 8, volumes: [{l:0.25,v:250},{l:0.33,v:330},{l:0.5,v:500}] },
+            { id: 2, name: 'Wein', icon: '🍷', alcoholMin: 11, alcoholMax: 14, volumes: [{l:0.1,v:100},{l:0.2,v:200}] },
+            { id: 3, name: 'Schnaps', icon: '🥃', alcoholMin: 35, alcoholMax: 45, volumes: [{l:0.02,v:20},{l:0.04,v:40}] },
+            { id: 4, name: 'Cocktail', icon: '🍸', alcoholMin: 10, alcoholMax: 20, volumes: [{l:0.2,v:200},{l:0.3,v:300},{l:0.4,v:400}] },
+            { id: 5, name: 'Sekt', icon: '🥂', alcoholMin: 10, alcoholMax: 13, volumes: [{l:0.1,v:100}] },
+            { id: 6, name: 'Longdrink', icon: '🍹', alcoholMin: 8, alcoholMax: 15, volumes: [{l:0.25,v:250},{l:0.4,v:400}] },
+        ];
+        const quickSelectDrinks = [
+            { name: 'Pils', icon: '🍺', volume: 330, alcohol: 4.8, volumes: [{l:0.25,v:250},{l:0.33,v:330},{l:0.5,v:500}] },
+            { name: 'Weizen', icon: '🌾', volume: 500, alcohol: 5.2, volumes: [{l:0.33,v:330},{l:0.5,v:500}] },
+            { name: 'Kölsch', icon: '🍻', volume: 200, alcohol: 4.8, volumes: [{l:0.2,v:200},{l:0.3,v:300}] },
+            { name: 'Altbier', icon: '🍺', volume: 250, alcohol: 4.8, volumes: [{l:0.25,v:250},{l:0.33,v:330}] },
+            { name: 'Lager', icon: '🍺', volume: 330, alcohol: 5.0, volumes: [{l:0.33,v:330},{l:0.5,v:500}] },
+            { name: 'Bockbier', icon: '🐐', volume: 330, alcohol: 6.5, volumes: [{l:0.33,v:330},{l:0.5,v:500}] },
+            { name: 'IPA', icon: '🌿', volume: 330, alcohol: 6.0, volumes: [{l:0.33,v:330},{l:0.44,v:440}] },
+            { name: 'Stout', icon: '☕', volume: 330, alcohol: 5.5, volumes: [{l:0.33,v:330},{l:0.5,v:500}] },
+            { name: 'Radler', icon: '🍋', volume: 500, alcohol: 2.5, volumes: [{l:0.33,v:330},{l:0.5,v:500}] },
+            { name: 'Rotwein', icon: '🍷', volume: 200, alcohol: 13.0, volumes: [{l:0.1,v:100},{l:0.2,v:200}] },
+            { name: 'Weißwein', icon: '🥂', volume: 200, alcohol: 12.0, volumes: [{l:0.1,v:100},{l:0.2,v:200}] },
+            { name: 'Roséwein', icon: '🌸', volume: 200, alcohol: 12.5, volumes: [{l:0.1,v:100},{l:0.2,v:200}] },
+            { name: 'Prosecco', icon: '🍾', volume: 100, alcohol: 11.0, volumes: [{l:0.1,v:100},{l:0.75,v:750}] },
+            { name: 'Glühwein', icon: '♨️', volume: 200, alcohol: 9.0, volumes: [{l:0.2,v:200}] },
+            { name: 'Wodka', icon: '🍸', volume: 40, alcohol: 40.0, volumes: [{l:0.02,v:20},{l:0.04,v:40}] },
+            { name: 'Gin', icon: '🍸', volume: 40, alcohol: 40.0, volumes: [{l:0.02,v:20},{l:0.04,v:40}] },
+            { name: 'Rum', icon: '🥃', volume: 40, alcohol: 40.0, volumes: [{l:0.02,v:20},{l:0.04,v:40}] },
+            { name: 'Tequila', icon: '🌵', volume: 40, alcohol: 38.0, volumes: [{l:0.02,v:20},{l:0.04,v:40}] },
+            { name: 'Whiskey', icon: '🥃', volume: 40, alcohol: 42.0, volumes: [{l:0.02,v:20},{l:0.04,v:40}] },
+            { name: 'Jägermeister', icon: '🦌', volume: 20, alcohol: 35.0, volumes: [{l:0.02,v:20},{l:0.04,v:40}] },
+            { name: 'Baileys', icon: '🍦', volume: 40, alcohol: 17.0, volumes: [{l:0.04,v:40},{l:0.1,v:100}] },
+            { name: 'Pfeffi', icon: '🍃', volume: 20, alcohol: 18.0, volumes: [{l:0.02,v:20}] },
+            { name: 'Mojito', icon: '🍹', volume: 300, alcohol: 12.0, volumes: [{l:0.3,v:300},{l:0.4,v:400}] },
+            { name: 'Caipirinha', icon: '🍹', volume: 250, alcohol: 15.0, volumes: [{l:0.25,v:250},{l:0.35,v:350}] },
+            { name: 'Gin Tonic', icon: '🍹', volume: 250, alcohol: 10.0, volumes: [{l:0.25,v:250},{l:0.4,v:400}] },
+            { name: 'Aperol Spritz', icon: '🍹', volume: 250, alcohol: 11.0, volumes: [{l:0.25,v:250}] },
+        ];
+        const ALCOHOL_BREAKDOWN_RATE = 0.15;
+        const ALCOHOL_ABSORPTION_TIME = 30;
+
+        // --- STATE ---
+        let userData = JSON.parse(localStorage.getItem('userData')) || { gender: null, weight: null, age: null };
+        let consumedDrinks = JSON.parse(localStorage.getItem('consumedDrinks')) || [];
+        consumedDrinks = consumedDrinks.map(d => ({...d, timestamp: new Date(d.timestamp)}));
+        let bacChart, projectionChart;
+        let currentDrinkToAdd = null;
+        let currentDrinkType = 'adjustable'; // 'adjustable' or 'quick'
+
+        // --- DOM ELEMENTS ---
+        const docHtml = document.documentElement;
+        const navButtons = document.querySelectorAll('.nav-button');
+        const bacResultEl = document.getElementById('bac-result');
+        const userInfoDisplay = document.getElementById('user-info-display');
+        const consumedDrinksList = document.getElementById('consumed-drinks-list');
+        const soberTimeInfo = document.getElementById('sober-time-info');
+        const modals = document.querySelectorAll('.fixed.inset-0');
+        const projectionSlider = document.getElementById('projection-slider');
+
+        // --- FUNCTIONS ---
+
+        const saveState = () => {
+            localStorage.setItem('userData', JSON.stringify(userData));
+            localStorage.setItem('consumedDrinks', JSON.stringify(consumedDrinks));
+        };
+
+        const themeToggle = document.getElementById('dark-mode-toggle');
+        const lightIcon = document.getElementById('theme-icon-light');
+        const darkIcon = document.getElementById('theme-icon-dark');
+        
+        const applyTheme = (isDark) => {
+            docHtml.classList.toggle('dark', isDark);
+            lightIcon.classList.toggle('hidden', isDark);
+            darkIcon.classList.toggle('hidden', !isDark);
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateAllCharts();
+        };
+
+        themeToggle.addEventListener('click', () => applyTheme(!docHtml.classList.contains('dark')));
+        
+        const switchView = (viewId) => {
+            document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === viewId));
+            navButtons.forEach(b => {
+                const isTarget = b.dataset.view === viewId;
+                b.classList.toggle('text-indigo-600', isTarget);
+                b.classList.toggle('dark:text-indigo-400', isTarget);
+                b.classList.toggle('text-slate-500', !isTarget);
+                b.classList.toggle('dark:text-slate-400', !isTarget);
+            });
+        };
+
+        const renderAllMenus = () => {
+            const adjustableGrid = document.getElementById('adjustable-drink-menu-grid');
+            adjustableGrid.innerHTML = adjustableDrinks.map(drink => {
+                const alcoholRange = `(${drink.alcoholMin.toFixed(1)}-${drink.alcoholMax.toFixed(1)}%)`;
+                return `
+                <button data-drink-id="${drink.id}" data-drink-type="adjustable" class="text-center p-4 bg-slate-100 dark:bg-slate-700 rounded-lg shadow hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors duration-300">
+                    <div class="text-4xl mb-2">${drink.icon}</div>
+                    <div class="font-semibold">${drink.name}</div>
+                    <div class="text-sm text-slate-500 dark:text-slate-400">${alcoholRange}</div>
+                </button>
+            `}).join('');
+            adjustableGrid.querySelectorAll('button').forEach(b => b.addEventListener('click', () => openAddDrinkModal(parseInt(b.dataset.drinkId), 'adjustable')));
+
+            const quickGrid = document.getElementById('quick-select-menu-grid');
+            quickGrid.innerHTML = quickSelectDrinks.map((drink, index) => `
+                <button data-drink-index="${index}" data-drink-type="quick" class="text-center p-3 bg-slate-100 dark:bg-slate-700 rounded-lg shadow hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors duration-300 flex flex-col items-center justify-center">
+                    <div class="text-2xl">${drink.icon}</div>
+                    <div class="font-semibold text-sm mt-1">${drink.name}</div>
+                    <div class="text-xs text-slate-500 dark:text-slate-400">${drink.alcohol.toFixed(1)}%</div>
+                </button>
+            `).join('');
+            quickGrid.querySelectorAll('button').forEach(b => b.addEventListener('click', () => openAddDrinkModal(parseInt(b.dataset.drinkIndex), 'quick')));
+        };
+
+        const renderConsumedList = () => {
+            if (consumedDrinks.length === 0) {
+                consumedDrinksList.innerHTML = `<p class="text-slate-500 dark:text-slate-400">Noch keine Getränke hinzugefügt.</p>`;
+                return;
+            }
+            consumedDrinksList.innerHTML = [...consumedDrinks].reverse().map(drink => {
+                const time = drink.timestamp.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                return `
+                <div class="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg">
+                    <div>
+                        <span class="text-2xl mr-3">${drink.icon}</span>
+                        <span class="font-medium">${drink.name} (${drink.volume}ml)</span>
+                        ${drink.selectedAlcohol > 0 ? `<span class="text-sm text-slate-500 dark:text-slate-400 ml-2">(${drink.selectedAlcohol.toFixed(1)}%)</span>` : ''}
+                    </div>
+                    <span class="text-sm text-slate-600 dark:text-slate-300">${time} Uhr</span>
+                </div>`;
+            }).join('');
+        };
+
+        const updateUserInfoDisplay = () => {
+            if (userData.weight && userData.gender) {
+                userInfoDisplay.innerHTML = `
+                    <span class="text-2xl">${userData.gender === 'male' ? '♂️' : '♀️'}</span>
+                    <span class="font-medium">${userData.weight}kg</span>
+                    <span class="font-medium">${userData.age}J.</span>`;
+            } else {
+                userInfoDisplay.innerHTML = `<p class="text-slate-500 dark:text-slate-400">Daten fehlen</p>`;
+            }
+        };
+
+        /**
+         * Returns the Widmark reduction factor 'r' based on gender and age.
+         * This factor represents the proportion of body weight that is body water.
+         * It decreases with age. Values are based on scientific literature (e.g., Forrest, A. R. W.).
+         * @param {string} gender - 'male' or 'female'
+         * @param {number} age - Age in years
+         * @returns {number} The Widmark reduction factor 'r'.
+         */
+        const getWidmarkFactor = (gender, age) => {
+            if (gender === 'male') {
+                if (age < 18) return 0.70; // Approximation for younger ages
+                if (age <= 30) return 0.68;
+                if (age <= 50) return 0.67;
+                return 0.65;
+            } else { // female
+                if (age < 18) return 0.60; // Approximation for younger ages
+                if (age <= 30) return 0.55;
+                if (age <= 50) return 0.52;
+                return 0.50;
+            }
+        };
+
+        const calculateCurrentBAC = () => {
+            if (!userData.gender || !userData.weight || !userData.age) return 0;
+            
+            const r = getWidmarkFactor(userData.gender, userData.age);
+            let totalAlcoholGrams = 0;
+            let breakdownTotal = 0;
+            const now = new Date();
+
+            consumedDrinks.forEach(drink => {
+                if (drink.selectedAlcohol > 0) {
+                    totalAlcoholGrams += drink.volume * (drink.selectedAlcohol / 100) * 0.8;
+                    const timeDiffMinutes = (now - drink.timestamp) / (1000 * 60);
+                    if (timeDiffMinutes > ALCOHOL_ABSORPTION_TIME) {
+                        const breakdownHours = (timeDiffMinutes - ALCOHOL_ABSORPTION_TIME) / 60;
+                        breakdownTotal += breakdownHours * ALCOHOL_BREAKDOWN_RATE;
+                    }
+                }
+            });
+
+            if (totalAlcoholGrams === 0) return 0;
+            const peakBac = totalAlcoholGrams / (userData.weight * r);
+            const currentBac = peakBac - breakdownTotal;
+            return currentBac > 0 ? currentBac : 0;
+        };
+
+        const updateAllCharts = () => {
+            updateBacDoughnutChart();
+            updateProjectionBarChart();
+        };
+        
+        const updateBacDoughnutChart = () => {
+            const ctx = document.getElementById('bac-chart').getContext('2d');
+            const isDark = docHtml.classList.contains('dark');
+            const textColor = isDark ? '#e2e8f0' : '#334155';
+
+            const groupedDrinks = consumedDrinks.reduce((acc, drink) => {
+                if(drink.selectedAlcohol > 0) {
+                    const key = drink.name;
+                    if (!acc[key]) acc[key] = { name: drink.name, icon: drink.icon, count: 0, alcoholGrams: 0 };
+                    acc[key].count++;
+                    acc[key].alcoholGrams += drink.volume * (drink.selectedAlcohol / 100) * 0.8;
+                }
+                return acc;
+            }, {});
+
+            const chartData = Object.values(groupedDrinks);
+            const totalAlcohol = chartData.reduce((sum, d) => sum + d.alcoholGrams, 0);
+
+            if (bacChart) bacChart.destroy();
+            bacChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: chartData.map(d => `${d.icon} ${d.name}`),
+                    datasets: [{
+                        data: chartData.map(d => d.alcoholGrams),
+                        backgroundColor: ['#6366f1', '#f87171', '#fbbf24', '#60a5fa', '#a78bfa', '#f472b6', '#34d399'],
+                        borderColor: isDark ? '#1e293b' : '#FFFFFF',
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top', labels: { color: textColor } },
+                        title: { display: true, text: 'Alkoholbeitrag pro Getränk (in Gramm)', color: textColor },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const drinkData = chartData[context.dataIndex];
+                                    const percentage = totalAlcohol > 0 ? (drinkData.alcoholGrams / totalAlcohol * 100).toFixed(1) : 0;
+                                    return `${drinkData.count}x getrunken | ${drinkData.alcoholGrams.toFixed(1)}g (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        const updateProjectionBarChart = () => {
+            const hoursInFuture = parseFloat(projectionSlider.value);
+            const sliderLabel = document.getElementById('projection-slider-label');
+            if (hoursInFuture === 0) {
+                sliderLabel.textContent = 'Jetzt';
+            } else {
+                sliderLabel.textContent = `In ${hoursInFuture.toFixed(1)} Stunden`;
+            }
+
+            if (!userData.gender || !userData.weight || !userData.age) {
+                 if (projectionChart) {
+                    projectionChart.data.datasets = [];
+                    projectionChart.update();
+                 }
+                 return;
+            }
+
+            const r = getWidmarkFactor(userData.gender, userData.age);
+            const now = new Date();
+            const futureTime = new Date(now.getTime() + hoursInFuture * 60 * 60 * 1000);
+
+            let totalBac = 0;
+            const datasets = consumedDrinks.map((drink, index) => {
+                if (drink.selectedAlcohol === 0) return null;
+
+                const timeDiffMinutes = (futureTime - drink.timestamp) / (1000 * 60);
+                let breakdownHours = 0;
+                if (timeDiffMinutes > ALCOHOL_ABSORPTION_TIME) {
+                    breakdownHours = (timeDiffMinutes - ALCOHOL_ABSORPTION_TIME) / 60;
+                }
+
+                const alcoholGrams = drink.volume * (drink.selectedAlcohol / 100) * 0.8;
+                const peakBacContribution = alcoholGrams / (userData.weight * r);
+                const currentBacContribution = peakBacContribution - (breakdownHours * ALCOHOL_BREAKDOWN_RATE);
+                
+                const finalBac = currentBacContribution > 0 ? currentBacContribution : 0;
+                totalBac += finalBac;
+
+                return {
+                    label: `${drink.icon} ${drink.name}`,
+                    data: [finalBac],
+                    backgroundColor: ['#6366f1', '#f87171', '#fbbf24', '#60a5fa', '#a78bfa', '#f472b6', '#34d399'][index % 7]
+                };
+            }).filter(Boolean);
+
+            const isDark = docHtml.classList.contains('dark');
+            const textColor = isDark ? '#e2e8f0' : '#334155';
+            const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            
+            const suggestedMax = Math.max(2.0, Math.ceil(totalBac * 2) / 2);
+
+            if (projectionChart) {
+                projectionChart.data.datasets = datasets;
+                projectionChart.options.plugins.title.text = `Promillewert: ${totalBac.toFixed(2)}‰`;
+                projectionChart.options.scales.x.max = suggestedMax;
+                projectionChart.update();
+            } else {
+                const ctx = document.getElementById('projection-chart').getContext('2d');
+                projectionChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Promille'],
+                        datasets: datasets
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        animation: {
+                            duration: 400
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: `Promillewert: ${totalBac.toFixed(2)}‰`, color: textColor },
+                            annotation: {
+                                annotations: {
+                                    line1: {
+                                        type: 'line',
+                                        xMin: 0.5,
+                                        xMax: 0.5,
+                                        borderColor: 'rgb(255, 99, 132)',
+                                        borderWidth: 2,
+                                        borderDash: [6, 6],
+                                        label: {
+                                            content: '0.5‰ Limit',
+                                            position: 'start',
+                                            backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                                            color: 'white',
+                                            font: { size: 10 }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                stacked: true,
+                                max: suggestedMax,
+                                ticks: { color: textColor, callback: v => `${v.toFixed(2)}‰` },
+                                grid: { color: gridColor },
+                                title: { display: true, text: 'Promille (‰)', color: textColor }
+                            },
+                            y: { stacked: true, ticks: { display: false }, grid: { display: false } }
+                        }
+                    }
+                });
+            }
+
+            const currentBacNow = calculateCurrentBAC();
+            if (currentBacNow > 0) {
+                const hoursToSober = currentBacNow / ALCOHOL_BREAKDOWN_RATE;
+                const h = Math.floor(hoursToSober);
+                const m = Math.floor((hoursToSober - h) * 60);
+                soberTimeInfo.textContent = `Voraussichtlich nüchtern in ca. ${h} Std. und ${m} Min.`;
+            } else {
+                soberTimeInfo.textContent = consumedDrinks.length > 0 ? `Du bist wieder nüchtern.` : `Füge ein alkoholisches Getränk hinzu, um den Verlauf zu sehen.`;
+            }
+        };
+
+        const openModal = (modalId) => document.getElementById(modalId).classList.remove('hidden');
+        const closeModal = (modalId) => document.getElementById(modalId).classList.add('hidden');
+        
+        const setupTimeScroller = (containerId, max, current, step = 1) => {
+            const container = document.getElementById(containerId);
+            let items = '';
+            for (let i = 0; i < max; i += step) {
+                items += `<div class="time-picker-item">${String(i).padStart(2, '0')}</div>`;
+            }
+            container.innerHTML = items;
+            const currentIndex = Math.round(current / step);
+            container.scrollTop = currentIndex * 40;
+        };
+
+        const openAddDrinkModal = (drinkIndex, type) => {
+            currentDrinkType = type;
+            const drinkSource = type === 'adjustable' ? adjustableDrinks : quickSelectDrinks;
+            const lookupIndex = type === 'adjustable' ? drinkIndex - 1 : drinkIndex;
+            currentDrinkToAdd = drinkSource[lookupIndex];
+            if (!currentDrinkToAdd) return;
+
+            document.getElementById('add-drink-title').innerHTML = `${currentDrinkToAdd.icon} ${currentDrinkToAdd.name} anpassen`;
+            
+            const volumeSelector = document.getElementById('drink-volume-selector');
+            volumeSelector.innerHTML = currentDrinkToAdd.volumes.map((vol, index) => 
+                `<button type="button" data-volume="${vol.v}" class="${index === 0 ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-600'} text-sm font-semibold py-2 px-3 rounded-md">${vol.l}L</button>`
+            ).join('');
+            volumeSelector.querySelectorAll('button').forEach(b => b.addEventListener('click', (e) => {
+                volumeSelector.querySelectorAll('button').forEach(btn => {
+                    btn.classList.remove('bg-indigo-600', 'text-white');
+                    btn.classList.add('bg-slate-200', 'dark:bg-slate-600');
+                });
+                e.target.classList.add('bg-indigo-600', 'text-white');
+                e.target.classList.remove('bg-slate-200', 'dark:bg-slate-600');
+            }));
+
+            const alcoholContainer = document.getElementById('alcohol-slider-container');
+            if (type === 'adjustable') {
+                alcoholContainer.style.display = 'block';
+                const slider = document.getElementById('alcohol-percentage');
+                const label = document.getElementById('alcohol-percentage-label');
+                slider.min = currentDrinkToAdd.alcoholMin;
+                slider.max = currentDrinkToAdd.alcoholMax;
+                slider.step = 0.1;
+                const defaultValue = ((currentDrinkToAdd.alcoholMin + currentDrinkToAdd.alcoholMax) / 2).toFixed(1);
+                slider.value = defaultValue;
+                label.textContent = `${defaultValue}%`;
+                slider.oninput = () => label.textContent = `${parseFloat(slider.value).toFixed(1)}%`;
+            } else {
+                alcoholContainer.style.display = 'none';
+            }
+
+            const now = new Date();
+            const currentMinutes = now.getMinutes();
+            const roundedMinutes = Math.round(currentMinutes / 5) * 5;
+            now.setMinutes(roundedMinutes);
+
+            setupTimeScroller('hours-scroll', 24, now.getHours(), 1);
+            setupTimeScroller('minutes-scroll', 60, now.getMinutes(), 5);
+
+            openModal('add-drink-modal');
+        };
+
+        const handleAddDrinkSubmit = (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const selectedVolumeEl = form.querySelector('#drink-volume-selector .bg-indigo-600');
+            const volume = parseInt(selectedVolumeEl.dataset.volume);
+            
+            let selectedAlcohol;
+            if (currentDrinkType === 'adjustable') {
+                selectedAlcohol = parseFloat(form.querySelector('#alcohol-percentage').value);
+            } else {
+                selectedAlcohol = currentDrinkToAdd.alcohol;
+            }
+            
+            const hours = Math.round(form.querySelector('#hours-scroll').scrollTop / 40);
+            const minutesIndex = Math.round(form.querySelector('#minutes-scroll').scrollTop / 40);
+            const minutes = minutesIndex * 5;
+
+            const timestamp = new Date();
+            timestamp.setHours(hours, minutes, 0, 0);
+
+            consumedDrinks.push({ ...currentDrinkToAdd, volume, selectedAlcohol, timestamp });
+            consumedDrinks.sort((a, b) => a.timestamp - b.timestamp);
+
+            closeModal('add-drink-modal');
+            if (selectedAlcohol > 0 && (!userData.gender || !userData.weight)) openModal('user-data-modal');
+            
+            updateAll();
+            switchView('dashboard-view');
+        };
+
+        const updateAll = () => {
+            bacResultEl.textContent = `${calculateCurrentBAC().toFixed(2)} ‰`;
+            renderConsumedList();
+            updateAllCharts();
+            updateUserInfoDisplay();
+            saveState();
+        };
+
+        // --- EVENT LISTENERS ---
+        navButtons.forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+        document.getElementById('user-data-button').addEventListener('click', () => openModal('user-data-modal'));
+        document.getElementById('add-drink-form').addEventListener('submit', handleAddDrinkSubmit);
+        document.getElementById('user-data-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            userData.gender = e.target.gender.value;
+            userData.weight = parseFloat(e.target.weight.value);
+            userData.age = parseInt(e.target.age.value);
+            closeModal('user-data-modal');
+            updateAll();
+        });
+        document.getElementById('reset-button').addEventListener('click', () => {
+            if (confirm("Möchten Sie wirklich alle getrunkenen Getränke löschen?")) {
+                consumedDrinks = [];
+                projectionSlider.value = 0;
+                updateAll();
+            }
+        });
+        modals.forEach(m => m.querySelector('.modal-cancel-button').addEventListener('click', () => closeModal(m.id)));
+        projectionSlider.addEventListener('input', updateProjectionBarChart);
+
+        // --- INITIALIZATION ---
+        if (window.ChartjsPluginAnnotation) {
+            Chart.register(window.ChartjsPluginAnnotation);
+        } else {
+            console.error("Chart.js Annotation Plugin not found!");
+        }
+        
+        const initialThemeIsDark = localStorage.getItem('theme') === 'dark' || (localStorage.getItem('theme') === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        applyTheme(initialThemeIsDark);
+        document.getElementById('gender').innerHTML = `<option value="male">Männlich</option><option value="female">Weiblich</option>`;
+        if(userData.gender) document.getElementById('gender').value = userData.gender;
+        if(userData.weight) document.getElementById('weight').value = userData.weight;
+        if(userData.age) document.getElementById('age').value = userData.age;
+        renderAllMenus();
+        updateAll();
+    };
+
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then(reg => console.log('Service Worker: Registered')).catch(err => console.log(`Service Worker: Error: ${err}`));
+        });
+    }
+    </script>
+</body>
+</html>
