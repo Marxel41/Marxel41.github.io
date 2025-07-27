@@ -96,8 +96,8 @@
                 
                 <div class="bg-slate-700/50 p-4 rounded-lg text-xs text-slate-400">
                     <h4 class="font-bold text-slate-300 mb-2">Berechnungsgrundlage</h4>
-                    <p>Die Schätzung des Promillewerts basiert auf der wissenschaftlich anerkannten <strong class="text-slate-200">Widmark-Formel</strong>. Sie berücksichtigt individuell Alter, Geschlecht und Gewicht zur Bestimmung des Körperwasseranteils.</p>
-                    <p class="mt-1">Für den Abbau wird eine Rate von <strong class="text-slate-200">0,1g Alkohol pro kg Körpergewicht pro Stunde</strong> angenommen, beginnend ca. 30-60 Minuten nach Konsum. Alle Angaben sind Schätzwerte ohne Gewähr.</p>
+                    <p>Die Schätzung des Promillewerts basiert auf der <strong class="text-slate-200">Watson-Formel</strong> zur Bestimmung des Gesamtkörperwassers, welche Alter, Geschlecht, Gewicht und Körpergröße berücksichtigt.</p>
+                    <p class="mt-1">Für den Abbau wird eine Rate von <strong class="text-slate-200">0,1g Alkohol pro kg Körpergewicht pro Stunde</strong> angenommen, beginnend ca. 30-60 Minuten nach dem ersten Konsum. Alle Angaben sind Schätzwerte ohne Gewähr.</p>
                 </div>
 
                 <button id="reset-button" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition duration-300">Alle Getränke löschen</button>
@@ -151,6 +151,10 @@
                     <label for="weight" class="block text-sm font-medium">Gewicht (in kg)</label>
                     <input type="number" id="weight" placeholder="75" class="mt-1 block w-full py-2 px-3 border border-slate-600 bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
+                 <div>
+                    <label for="height" class="block text-sm font-medium">Größe (in cm)</label>
+                    <input type="number" id="height" placeholder="180" class="mt-1 block w-full py-2 px-3 border border-slate-600 bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
                 <div>
                     <label for="age" class="block text-sm font-medium">Alter</label>
                     <input type="number" id="age" placeholder="30" class="mt-1 block w-full py-2 px-3 border border-slate-600 bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
@@ -175,9 +179,10 @@
                     <label for="alcohol-percentage" class="block text-sm font-medium">Alkoholgehalt: <span id="alcohol-percentage-label" class="font-bold"></span></label>
                     <input type="range" id="alcohol-percentage" class="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer mt-2 custom-slider">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium">Uhrzeit des Konsums</label>
-                    <div class="time-picker mt-1">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium">Datum & Uhrzeit des Konsums</label>
+                    <input type="date" id="drink-date" class="block w-full py-2 px-3 border border-slate-600 bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <div class="time-picker">
                         <div class="time-picker-column"><div id="hours-scroll" class="time-picker-scroll"></div></div>
                         <div class="time-picker-colon">:</div>
                         <div class="time-picker-column"><div id="minutes-scroll" class="time-picker-scroll"></div></div>
@@ -203,9 +208,10 @@
                     <label for="custom-alcohol-slider" class="block text-sm font-medium">Alkoholgehalt: <span id="custom-alcohol-label" class="font-bold">5.0%</span></label>
                     <input id="custom-alcohol-slider" type="range" min="0" max="100" step="0.1" value="5" class="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer mt-2 custom-slider">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium">Uhrzeit des Konsums</label>
-                    <div class="time-picker mt-1">
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium">Datum & Uhrzeit des Konsums</label>
+                    <input type="date" id="custom-drink-date" class="block w-full py-2 px-3 border border-slate-600 bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <div class="time-picker">
                         <div class="time-picker-column"><div id="custom-hours-scroll" class="time-picker-scroll"></div></div>
                         <div class="time-picker-colon">:</div>
                         <div class="time-picker-column"><div id="custom-minutes-scroll" class="time-picker-scroll"></div></div>
@@ -263,7 +269,7 @@
         const ALCOHOL_ABSORPTION_TIME = 30;
 
         // --- STATE ---
-        let userData = JSON.parse(localStorage.getItem('userData')) || { gender: null, weight: null, age: null };
+        let userData = JSON.parse(localStorage.getItem('userData')) || { gender: null, weight: null, age: null, height: null };
         let consumedDrinks = JSON.parse(localStorage.getItem('consumedDrinks')) || [];
         consumedDrinks = consumedDrinks.map(d => ({...d, timestamp: new Date(d.timestamp)}));
         let bacChart, projectionChart;
@@ -354,42 +360,29 @@
         };
 
         const updateUserInfoDisplay = () => {
-            if (userData.weight && userData.gender) {
+            if (userData.weight && userData.gender && userData.height && userData.age) {
                 userInfoDisplay.innerHTML = `
                     <span class="text-2xl">${userData.gender === 'male' ? '♂️' : '♀️'}</span>
                     <span class="font-medium">${userData.weight}kg</span>
+                    <span class="font-medium">${userData.height}cm</span>
                     <span class="font-medium">${userData.age}J.</span>`;
             } else {
                 userInfoDisplay.innerHTML = `<p class="text-slate-400">Daten fehlen</p>`;
             }
         };
 
-        /**
-         * Returns the Widmark reduction factor 'r' based on gender and age.
-         * This factor represents the proportion of body weight that is body water.
-         * It decreases with age. Values are based on scientific literature (e.g., Forrest, A. R. W.).
-         * @param {string} gender - 'male' or 'female'
-         * @param {number} age - Age in years
-         * @returns {number} The Widmark reduction factor 'r'.
-         */
-        const getWidmarkFactor = (gender, age) => {
+        const calculateTBW = (gender, weight, height, age) => {
             if (gender === 'male') {
-                if (age < 18) return 0.70; // Approximation for younger ages
-                if (age <= 30) return 0.68;
-                if (age <= 50) return 0.67;
-                return 0.65;
+                return 2.447 - 0.09156 * age + 0.1074 * height + 0.3362 * weight;
             } else { // female
-                if (age < 18) return 0.60; // Approximation for younger ages
-                if (age <= 30) return 0.55;
-                if (age <= 50) return 0.52;
-                return 0.50;
+                return -2.097 + 0.1069 * height + 0.2466 * weight;
             }
         };
-
+        
         const calculateBACatTime = (targetTime) => {
-            if (!userData.gender || !userData.weight || !userData.age) return 0;
+            if (!userData.gender || !userData.weight || !userData.age || !userData.height) return 0;
             
-            const r = getWidmarkFactor(userData.gender, userData.age);
+            const totalBodyWater = calculateTBW(userData.gender, userData.weight, userData.height, userData.age);
             const hourlyBreakdownInGrams = userData.weight * ALCOHOL_GRAMS_BREAKDOWN_PER_KG_PER_HOUR;
             
             let totalRemainingAlcoholGrams = 0;
@@ -414,7 +407,7 @@
 
             if (totalRemainingAlcoholGrams <= 0) return 0;
 
-            const totalBac = totalRemainingAlcoholGrams / (userData.weight * r);
+            const totalBac = totalRemainingAlcoholGrams / (totalBodyWater * 1.055);
             return totalBac > 0 ? totalBac : 0;
         };
 
@@ -480,7 +473,7 @@
                 sliderLabel.textContent = `In ${hoursInFuture.toFixed(1)} Stunden`;
             }
 
-            if (!userData.gender || !userData.weight || !userData.age) {
+            if (!userData.gender || !userData.weight || !userData.age || !userData.height) {
                  if (projectionChart) {
                     projectionChart.data.datasets = [];
                     projectionChart.update();
@@ -492,6 +485,7 @@
             const now = new Date();
             const futureTime = new Date(now.getTime() + hoursInFuture * 60 * 60 * 1000);
             const hourlyBreakdownInGrams = userData.weight * ALCOHOL_GRAMS_BREAKDOWN_PER_KG_PER_HOUR;
+            const totalBodyWater = calculateTBW(userData.gender, userData.weight, userData.height, userData.age);
 
             let totalBac = 0;
             const datasets = consumedDrinks.map((drink, index) => {
@@ -507,7 +501,7 @@
                 }
 
                 const remainingGrams = initialAlcoholGrams - metabolizedGrams;
-                const bacContribution = remainingGrams > 0 ? remainingGrams / (userData.weight * r) : 0;
+                const bacContribution = remainingGrams > 0 ? remainingGrams / (totalBodyWater * 1.055) : 0;
                 
                 totalBac += bacContribution;
 
@@ -601,9 +595,6 @@
                 return `ca. ${h} Std. und ${m} Min.`;
             };
             
-            const currentBacNow = calculateBACatTime(new Date());
-            let timeInfoHTML = '';
-
             const calculateTimeToTarget = (targetBac) => {
                 const currentBac = calculateBACatTime(new Date());
                 if (currentBac <= targetBac) return 0;
@@ -620,6 +611,9 @@
                 }
                 return 24; // Fallback for very high values
             };
+
+            const currentBacNow = calculateBACatTime(new Date());
+            let timeInfoHTML = '';
 
             if (currentBacNow > 1.6) {
                 const hoursTo16 = calculateTimeToTarget(1.6);
@@ -707,6 +701,7 @@
             const roundedMinutes = Math.round(currentMinutes / 5) * 5;
             now.setMinutes(roundedMinutes);
 
+            document.getElementById('drink-date').valueAsDate = now;
             setupTimeScroller('hours-scroll', 24, now.getHours(), 1);
             setupTimeScroller('minutes-scroll', 60, now.getMinutes(), 5);
 
@@ -726,11 +721,12 @@
                 selectedAlcohol = currentDrinkToAdd.alcohol;
             }
             
+            const dateValue = form.querySelector('#drink-date').value;
             const hours = Math.round(form.querySelector('#hours-scroll').scrollTop / 40);
             const minutesIndex = Math.round(form.querySelector('#minutes-scroll').scrollTop / 40);
             const minutes = minutesIndex * 5;
 
-            const timestamp = new Date();
+            const timestamp = new Date(dateValue);
             timestamp.setHours(hours, minutes, 0, 0);
 
             consumedDrinks.push({ ...currentDrinkToAdd, volume, selectedAlcohol, timestamp });
@@ -767,6 +763,7 @@
             e.preventDefault();
             userData.gender = e.target.gender.value;
             userData.weight = parseFloat(e.target.weight.value);
+            userData.height = parseInt(e.target.height.value);
             userData.age = parseInt(e.target.age.value);
             closeModal('user-data-modal');
             updateAll();
@@ -813,6 +810,7 @@
             const roundedMinutes = Math.round(currentMinutes / 5) * 5;
             now.setMinutes(roundedMinutes);
 
+            document.getElementById('custom-drink-date').valueAsDate = now;
             setupTimeScroller('custom-hours-scroll', 24, now.getHours(), 1);
             setupTimeScroller('custom-minutes-scroll', 60, now.getMinutes(), 5);
             openModal('custom-drink-modal');
@@ -835,11 +833,12 @@
             const volume = parseInt(customVolumeSlider.value);
             const alcohol = parseFloat(customAlcoholSlider.value);
             
+            const dateValue = document.getElementById('custom-drink-date').value;
             const hours = Math.round(document.getElementById('custom-hours-scroll').scrollTop / 40);
             const minutesIndex = Math.round(document.getElementById('custom-minutes-scroll').scrollTop / 40);
             const minutes = minutesIndex * 5;
             
-            const timestamp = new Date();
+            const timestamp = new Date(dateValue);
             timestamp.setHours(hours, minutes, 0, 0);
 
             const newDrink = {
@@ -871,6 +870,7 @@
         document.getElementById('gender').innerHTML = `<option value="male">Männlich</option><option value="female">Weiblich</option>`;
         if(userData.gender) document.getElementById('gender').value = userData.gender;
         if(userData.weight) document.getElementById('weight').value = userData.weight;
+        if(userData.height) document.getElementById('height').value = userData.height;
         if(userData.age) document.getElementById('age').value = userData.age;
         renderAllMenus();
         updateAll();
