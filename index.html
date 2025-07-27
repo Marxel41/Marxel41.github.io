@@ -379,7 +379,7 @@
             }
         };
         
-        const calculateBACatTime = (targetTime) => {
+        const calculateBACatTime = (targetTime, drinkList = consumedDrinks) => {
             if (!userData.gender || !userData.weight || !userData.age || !userData.height) return 0;
             
             const totalBodyWater = calculateTBW(userData.gender, userData.weight, userData.height, userData.age);
@@ -387,8 +387,8 @@
             
             let totalRemainingAlcoholGrams = 0;
 
-            consumedDrinks.forEach(drink => {
-                if (drink.selectedAlcohol > 0) {
+            drinkList.forEach(drink => {
+                if (drink.selectedAlcohol > 0 && drink.timestamp < targetTime) {
                     const initialAlcoholGrams = drink.volume * (drink.selectedAlcohol / 100) * 0.8;
                     
                     const timeDiffMinutes = (targetTime - drink.timestamp) / (1000 * 60);
@@ -481,36 +481,19 @@
                  return;
             }
 
-            const r = getWidmarkFactor(userData.gender, userData.age);
             const now = new Date();
             const futureTime = new Date(now.getTime() + hoursInFuture * 60 * 60 * 1000);
-            const hourlyBreakdownInGrams = userData.weight * ALCOHOL_GRAMS_BREAKDOWN_PER_KG_PER_HOUR;
-            const totalBodyWater = calculateTBW(userData.gender, userData.weight, userData.height, userData.age);
-
-            let totalBac = 0;
+            const totalBac = calculateBACatTime(futureTime);
+            
             const datasets = consumedDrinks.map((drink, index) => {
-                if (drink.selectedAlcohol === 0) return null;
-
-                const initialAlcoholGrams = drink.volume * (drink.selectedAlcohol / 100) * 0.8;
-                
-                const timeDiffMinutes = (futureTime - drink.timestamp) / (1000 * 60);
-                let metabolizedGrams = 0;
-                if (timeDiffMinutes > ALCOHOL_ABSORPTION_TIME) {
-                    const breakdownHours = (timeDiffMinutes - ALCOHOL_ABSORPTION_TIME) / 60;
-                    metabolizedGrams = breakdownHours * hourlyBreakdownInGrams;
-                }
-
-                const remainingGrams = initialAlcoholGrams - metabolizedGrams;
-                const bacContribution = remainingGrams > 0 ? remainingGrams / (totalBodyWater * 1.055) : 0;
-                
-                totalBac += bacContribution;
-
+                const drinkBac = calculateBACatTime(futureTime, [drink]);
                 return {
                     label: `${drink.icon} ${drink.name}`,
-                    data: [bacContribution],
+                    data: [drinkBac],
                     backgroundColor: ['#6366f1', '#f87171', '#fbbf24', '#60a5fa', '#a78bfa', '#f472b6', '#34d399'][index % 7]
                 };
-            }).filter(Boolean);
+            }).filter(d => d.data[0] > 0);
+
 
             const textColor = '#e2e8f0';
             const gridColor = 'rgba(255, 255, 255, 0.1)';
@@ -885,3 +868,4 @@
     </script>
 </body>
 </html>
+
