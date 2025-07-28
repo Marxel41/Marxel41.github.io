@@ -50,6 +50,23 @@
         .time-picker-colon { font-size: 1.5rem; font-weight: bold; }
 
         input[type=range].custom-slider { accent-color: #4f46e5; }
+        
+        /* Style for date input to center text and hide icon */
+        input[type="date"] {
+            text-align: center;
+            position: relative;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            color: transparent;
+            background: transparent;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-200">
@@ -180,8 +197,11 @@
                     <input type="range" id="alcohol-percentage" class="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer mt-2 custom-slider">
                 </div>
                 <div class="space-y-2">
-                    <label class="block text-sm font-medium">Datum & Uhrzeit des Konsums</label>
-                    <input type="date" id="drink-date" class="block w-full py-2 px-3 border border-slate-600 bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <div class="flex justify-between items-center">
+                        <label class="block text-sm font-medium">Datum & Uhrzeit</label>
+                        <button type="button" id="set-now-btn-add" class="text-xs bg-indigo-600 text-white px-2 py-1 rounded-md hover:bg-indigo-700">Jetzt</button>
+                    </div>
+                    <input type="date" id="drink-date" class="block w-full text-center py-2 px-3 border border-slate-600 bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                     <div class="time-picker">
                         <div class="time-picker-column"><div id="hours-scroll" class="time-picker-scroll"></div></div>
                         <div class="time-picker-colon">:</div>
@@ -209,8 +229,11 @@
                     <input id="custom-alcohol-slider" type="range" min="0" max="100" step="0.1" value="5" class="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer mt-2 custom-slider">
                 </div>
                 <div class="space-y-2">
-                    <label class="block text-sm font-medium">Datum & Uhrzeit des Konsums</label>
-                    <input type="date" id="custom-drink-date" class="block w-full py-2 px-3 border border-slate-600 bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <div class="flex justify-between items-center">
+                        <label class="block text-sm font-medium">Datum & Uhrzeit</label>
+                        <button type="button" id="set-now-btn-custom" class="text-xs bg-indigo-600 text-white px-2 py-1 rounded-md hover:bg-indigo-700">Jetzt</button>
+                    </div>
+                    <input type="date" id="custom-drink-date" class="block w-full text-center py-2 px-3 border border-slate-600 bg-slate-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                     <div class="time-picker">
                         <div class="time-picker-column"><div id="custom-hours-scroll" class="time-picker-scroll"></div></div>
                         <div class="time-picker-colon">:</div>
@@ -681,7 +704,7 @@
 
             const now = new Date();
             const currentMinutes = now.getMinutes();
-            const roundedMinutes = Math.round(currentMinutes / 5) * 5;
+            const roundedMinutes = Math.floor(currentMinutes / 5) * 5;
             now.setMinutes(roundedMinutes);
 
             document.getElementById('drink-date').valueAsDate = now;
@@ -790,7 +813,7 @@
         document.getElementById('open-custom-drink-modal-button').addEventListener('click', () => {
             const now = new Date();
             const currentMinutes = now.getMinutes();
-            const roundedMinutes = Math.round(currentMinutes / 5) * 5;
+            const roundedMinutes = Math.floor(currentMinutes / 5) * 5;
             now.setMinutes(roundedMinutes);
 
             document.getElementById('custom-drink-date').valueAsDate = now;
@@ -841,6 +864,28 @@
             updateAll();
             switchView('dashboard-view');
         });
+        
+        document.getElementById('set-now-btn-add').addEventListener('click', () => {
+            const now = new Date();
+            const currentMinutes = now.getMinutes();
+            const roundedMinutes = Math.floor(currentMinutes / 5) * 5;
+            now.setMinutes(roundedMinutes);
+
+            document.getElementById('drink-date').valueAsDate = now;
+            setupTimeScroller('hours-scroll', 24, now.getHours(), 1);
+            setupTimeScroller('minutes-scroll', 60, now.getMinutes(), 5);
+        });
+
+        document.getElementById('set-now-btn-custom').addEventListener('click', () => {
+            const now = new Date();
+            const currentMinutes = now.getMinutes();
+            const roundedMinutes = Math.floor(currentMinutes / 5) * 5;
+            now.setMinutes(roundedMinutes);
+
+            document.getElementById('custom-drink-date').valueAsDate = now;
+            setupTimeScroller('custom-hours-scroll', 24, now.getHours(), 1);
+            setupTimeScroller('custom-minutes-scroll', 60, now.getMinutes(), 5);
+        });
 
 
         // --- INITIALIZATION ---
@@ -868,4 +913,3 @@
     </script>
 </body>
 </html>
-
